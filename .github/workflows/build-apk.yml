@@ -1,0 +1,77 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'asisten-kerja-operator-sekolah-v6-final.zip'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract project
+        shell: bash
+        run: |
+          rm -rf appsrc
+          mkdir appsrc
+          unzip -q asisten-kerja-operator-sekolah-v6-final.zip -d appsrc
+          test -f appsrc/package.json
+          test -f appsrc/capacitor.config.ts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        working-directory: appsrc
+        run: npm install --no-audit --no-fund
+
+      - name: Build web application
+        working-directory: appsrc
+        run: npm run build
+
+      - name: Add Android
+        working-directory: appsrc
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        working-directory: appsrc
+        run: npx cap sync android
+
+      - name: Build APK
+        working-directory: appsrc/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK
+        shell: bash
+        run: |
+          mkdir -p release
+          cp appsrc/android/app/build/outputs/apk/debug/app-debug.apk \
+            release/asisten-kerja-operator-sekolah.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: asisten-kerja-operator-sekolah-apk
+          path: release/asisten-kerja-operator-sekolah.apk
+          retention-days: 14
